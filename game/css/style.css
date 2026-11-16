@@ -292,6 +292,7 @@ button:focus-visible,
   top: 10%;
   display: grid;
   place-items: center;
+  pointer-events: none;
   color: var(--gold);
   text-align: center;
   font-size: clamp(1rem, 2.5vw, 1.5rem);
@@ -301,6 +302,11 @@ button:focus-visible,
     0 0 18px rgba(255, 215, 106, 0.45),
     0 0 36px rgba(164, 108, 255, 0.22);
   animation: bannerPulse 1800ms ease both;
+}
+
+#menuTitle {
+  font-size: clamp(2.1rem, 6.8vw, 4.45rem);
+  white-space: nowrap;
 }
 
 .overlay-float,
