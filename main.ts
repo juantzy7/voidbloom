@@ -12,10 +12,42 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
+
+function comparePaths(a: string, b: string) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function collectCopiedFiles(root: string, dir: string): string[] {
+  const entries = readdirSync(dir, { withFileTypes: true })
+    .map((entry) => entry.name)
+    .sort(comparePaths);
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = join(dir, entry);
+    if (statSync(fullPath).isDirectory()) {
+      files.push(...collectCopiedFiles(root, fullPath));
+      continue;
+    }
+
+    files.push(relative(root, fullPath).split(sep).join('/'));
+  }
+
+  return files;
+}
+
+function buildManifestLine(root: string, filePath: string) {
+  const fullPath = join(root, filePath);
+  const contents = readFileSync(fullPath);
+  const size = statSync(fullPath).size;
+  const hash = createHash('sha256').update(contents).digest('hex');
+  return `${filePath} ${size} ${hash}`;
+}
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
@@ -24,6 +56,16 @@ mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+
+const copiedFiles = [
+  ...collectCopiedFiles(out, join(out, 'game')),
+  ...collectCopiedFiles(out, join(out, 'screenshots')),
+].sort(comparePaths);
+
+writeFileSync(
+  join(out, 'manifest.txt'),
+  copiedFiles.map((filePath) => buildManifestLine(out, filePath)).join('\n') + (copiedFiles.length > 0 ? '\n' : ''),
+);
 
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
